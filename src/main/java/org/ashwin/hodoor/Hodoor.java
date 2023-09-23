@@ -1,34 +1,37 @@
+// Import statements for required classes and libraries
 package org.ashwin.hodoor;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
+// Definition of the Hodoor class
 public class Hodoor {
+    // Fields to hold configuration parameters
     private JedisPool jedisPool;
     private TimeUnit timeUnit;
     private int permitsPerUnit;
 
     // Lua script for rate limiting in seconds
     private static final String LUA_SECOND_SCRIPT =
+            // Lua script for rate limiting using Redis
             " local current = redis.call('incr',KEYS[1]); "
-            + " if tonumber(current) == 1 then "
-            + " -- If the counter is 1, set the expiration time "
-            + "     redis.call('expire',KEYS[1],ARGV[1]); "
-            + "     return 1; "
-            + " else"
-            + "     if tonumber(current) <= tonumber(ARGV[2]) then "
-            + "         return 1; "
-            + "     else "
-            + "         return -1; "
-            + "     end "
-            + " end ";
+                    + " if tonumber(current) == 1 then "
+                    + " -- If the counter is 1, set the expiration time "
+                    + "     redis.call('expire',KEYS[1],ARGV[1]); "
+                    + "     return 1; "
+                    + " else"
+                    + "     if tonumber(current) <= tonumber(ARGV[2]) then "
+                    + "         return 1; "
+                    + "     else "
+                    + "         return -1; "
+                    + "     end "
+                    + " end ";
 
     // Lua script for rate limiting in a specified time unit
     private static final String LUA_PERIOD_SCRIPT =
+            // Lua script for rate limiting within a specified time unit
             " local currentSectionCount = redis.call('zcount', KEYS[2], '-inf', '+inf'); " +
                     " local previousSectionCount = redis.call('zcount', KEYS[1], ARGV[3], '+inf'); " +
                     " local totalCountInPeriod = tonumber(currentSectionCount) + tonumber(previousSectionCount); " +
@@ -42,22 +45,25 @@ public class Hodoor {
                     "     return -1; " +
                     " end ";
 
-
+    // Constants defining time-to-live (TTL) values
     private static final int PERIOD_SECOND_TTL = 10;
     private static final int PERIOD_MINUTE_TTL = 2 * 60 + 10;
     private static final int PERIOD_HOUR_TTL = 2 * 3600 + 10;
     private static final int PERIOD_DAY_TTL = 2 * 3600 * 24 + 10;
 
+    // Constants defining time units in microseconds
     private static final long MICROSECONDS_IN_MINUTE = 60 * 1000000L;
     private static final long MICROSECONDS_IN_HOUR = 3600 * 1000000L;
     private static final long MICROSECONDS_IN_DAY = 24 * 3600 * 1000000L;
 
+    // Constructor to initialize rate limiting parameters
     public Hodoor(JedisPool jedisPool, TimeUnit timeUnit, int permitsPerUnit) {
         this.jedisPool = jedisPool;
         this.timeUnit = timeUnit;
         this.permitsPerUnit = permitsPerUnit;
     }
 
+    // Getter methods for fields
     public JedisPool getJedisPool() {
         return jedisPool;
     }
@@ -70,6 +76,7 @@ public class Hodoor {
         return permitsPerUnit;
     }
 
+    // Method to perform rate limiting
     public boolean acquire(String keyPrefix) {
         // Initialize the return value to false
         boolean rtv = false;
@@ -116,6 +123,7 @@ public class Hodoor {
         return rtv;
     }
 
+    // Method to perform rate limiting within a specified time unit
     private boolean doPeriod(Jedis jedis, String keyPrefix) {
         // Get the current time from Redis in seconds and microseconds
         List<String> jedisTime = jedis.time();
@@ -153,6 +161,7 @@ public class Hodoor {
         return val > 0;
     }
 
+    // Method to generate key names for the current time window
     private String[] getKeyNames(long currentSecond, String keyPrefix) {
         String[] keyNames = null;
         long index;
@@ -168,7 +177,7 @@ public class Hodoor {
                 index = currentSecond / (3600 * 24);
                 break;
             default:
-                throw new IllegalArgumentException("Don't support this TimeUnit: " + timeUnit);
+                throw new IllegalArgumentException("Time unit not supported: " + timeUnit);
         }
 
         String keyName1 = keyPrefix + ":" + (index - 1);
@@ -178,6 +187,7 @@ public class Hodoor {
         return keyNames;
     }
 
+    // Method to get the expiration time in seconds
     private int getExpire() {
         int expire = 0;
 
@@ -201,6 +211,7 @@ public class Hodoor {
         return expire;
     }
 
+    // Method to get the time window duration in microseconds
     private long getPeriodMicrosecond() {
         switch (timeUnit) {
             case MINUTES:
