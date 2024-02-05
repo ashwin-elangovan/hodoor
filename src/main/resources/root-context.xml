@@ -17,7 +17,6 @@
         <property name="testOnReturn" value="${redis.testOnReturn}"/>
     </bean>
 
-    <!-- redis的连接池pool，不是必选项：timeout/password  -->
     <bean id = "jedisPool" class="redis.clients.jedis.JedisPool">
         <constructor-arg index="0" ref="jedisPoolConfig"/>
         <constructor-arg index="1" value="${redis.host}" type="java.lang.String"/>
